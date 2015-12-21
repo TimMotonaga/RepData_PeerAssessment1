@@ -7,19 +7,153 @@ output:
 
 
 ## Loading and preprocessing the data
+We begin by reading the data into a data frame.You can download the data [here](https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip).
 
+```{r}
+activity = read.csv("./activity.csv", stringsAsFactors = FALSE)
+```
 
+To complete our reading and preprocessing, we will change the data type of the date column to POSIXct using the lubridate package.
+```{r}
+library(lubridate)
+activity$date = ymd(activity$date)
+```
 
 ## What is mean total number of steps taken per day?
 
+To begin with, we calculate the total number of steps taken per day with the ddply function from the plyr package.
 
+```{r}
+library(plyr)
+stepsbyday = ddply(activity,.(date),summarize, steps = sum(steps,na.rm =TRUE))
+Here is a histogram of the steps by day:
+
+```{r}
+hist(stepsbyday$steps,seq(0,22000,2000),col = "red", xlab = "Steps", main ="")
+```
+
+Next we calculate the mean number of steps taken per day.
+
+```{r}
+mean(stepsbyday$steps)
+```
+
+Finally, we calculate the median number of steps taken per day.
+
+```{r}
+median(stepsbyday$steps)
+```
 
 ## What is the average daily activity pattern?
 
+Our first goal in this section is to graph our data as a time series where the x-axis tells us the 5 minute interval in which we are measuring and the y-axis tells us the mean steps measured in that interval over all the days. Our second goal is to find the interval that has the highest mean number of steps.  
+
+Our first step is to create a table that tells us the mean number of steps by interval.
+
+```{r}
+stepsbyinterval = ddply(activity,.(interval),summarize,steps = mean(steps,na.rm = TRUE))
+```
+
+Then we graph this data as a time series.
+
+```{r}
+ plot(stepsbyinterval$interval, stepsbyinterval$steps, type = "l", main ="",xlab = "Interval", ylab = "Mean Steps")
+```
+
+This completes our first goal.  
+
+From the graph it is clear that the maximum number of mean steps occurs somewhere around interval 800. Using R, we can find the exact maximum.
+
+```{r}
+maximum = stepsbyinterval[stepsbyinterval$steps == max(stepsbyinterval$steps),]
+maximum
+```
+
+From the maximum table, we can see that the unique maximum occurs at interval 835. This completes our second goal.
 
 
 ## Imputing missing values
 
+First, we will find the total number of missing values in our original data set.
+
+```{r}
+attach(activity)
+sum(is.na(steps))
+sum(is.na(date))
+sum(is.na(interval))
+detach(activity)
+```
+
+From the output, we see that the steps column is missing 2304 values, and the other columns are not missing any values.
+
+We will now build a table which finds missing values and replaces them with the mean number of steps for their interval. 
+
+```{r}
+meansteps = rep(stepsbyinterval$steps,61)
+
+##This vector acts like another column for the activity data frame. It tells us the mean number of steps for   the current interval.
+
+filledactivity = activity
+
+for(i in 1:nrow(filledactivity)){
+    
+    if(is.na(filledactivity[i,1])){
+        filledactivity[i,1] = meansteps[i]
+    }
+}
+```
+
+The histogram of our new dataset, with filled values, looks like this:
+
+
+```{r}
+filledstepsbyday = ddply(filledactivity,.(date),summarize, steps = sum(steps,na.rm =TRUE))
+hist(filledstepsbyday$steps,seq(0,22000,2000),col = "red", xlab = "Steps", main ="")
+```
+
+Now we calculate the mean number of steps taken per day for the filled data.
+
+```{r}
+mean(filledstepsbyday$steps)
+```
+
+Finally, we calculate the median number of steps taken per day for the filled data.
 
 
 ## Are there differences in activity patterns between weekdays and weekends?
+
+We begin this section by creating a factor variable which tells us whether our day is a weekend or weekday, and then adding that variable to the filledactivity table.
+
+```{r}
+weekdayfactortable = mutate(filledactivity, weekdayfactor = weekdays(date))
+
+for(i in 1:nrow(weekdayfactortable)){
+    if(weekdayfactortable[i,4]=="Saturday"|weekdayfactortable[i,4]=="Sunday"){
+        weekdayfactortable[i,4] = "Weekend"
+    }else{
+        weekdayfactortable[i,4] = "Weekday"
+    }
+}
+
+weekdayfactortable$weekdayfactor = as.factor(weekdayfactortable$weekdayfactor)
+```
+
+We will now create a weekend and weekday table, and then use the base plotting system to print the desired time series.
+
+```{r}
+weekdaytable = weekdayfactortable[weekdayfactortable$weekdayfactor == "Weekday",]
+weekendtable = weekdayfactortable[weekdayfactortable$weekdayfactor == "Weekend",]
+
+weekdaystepsbyinterval = ddply(weekdaytable,.(interval),summarize,steps = mean(steps,na.rm = TRUE))
+
+weekendstepsbyinterval = ddply(weekendtable,.(interval),summarize,steps = mean(steps,na.rm = TRUE))
+
+par(mfrow = c(2,1))
+
+plot(weekendstepsbyinterval$interval, weekendstepsbyinterval$steps, type = "l", main ="Weekend",xlab = "Interval", ylab = "Number of Steps")
+plot(weekdaystepsbyinterval$interval, weekdaystepsbyinterval$steps, type = "l", main ="Weekday",xlab = "Interval", ylab = "Number of Steps")
+
+```
+
+
+This concludes the assignment.
